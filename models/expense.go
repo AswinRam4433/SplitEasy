@@ -1,8 +1,17 @@
 package models
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
+
+var (
+	expenseIDCounter int32
+	expenseMu        sync.Mutex // to ensure thread safety if accessed by multiple goroutines
+)
 
 type Expense struct {
+	Id           int32
 	Amount       float64
 	PaidBy       *User
 	SplitBetween []*User
@@ -27,7 +36,13 @@ func NewEqualExpense(amount float64, paidBy *User, splitBetween []*User) (*Expen
 		splitRate[i] = 1.0 // Default equal rate
 	}
 
+	expenseMu.Lock()
+	expenseIDCounter++
+	expenseId := userIDCounter
+	expenseMu.Unlock()
+
 	return &Expense{
+		Id:           expenseId,
 		Amount:       amount,
 		PaidBy:       paidBy,
 		SplitBetween: splitBetween,
