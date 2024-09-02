@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"splitwise/group"
 	"splitwise/models"
 	"strconv"
@@ -44,6 +45,7 @@ func main() {
 	e.POST("/payments", createPayment)
 	e.GET("/payments/:id", getPayment)
 	e.GET("/list", listUsers)
+	e.POST("/groups/:name/expenses", createExpense)
 
 	// Start server
 	logger.Println("Attempting To Start Server...")
@@ -222,4 +224,115 @@ func listUsers(c echo.Context) error {
 		logger.Println("User:", user.Id, user.Name)
 	}
 	return c.JSON(http.StatusOK, users)
+}
+
+func createExpense(c echo.Context) error {
+	fmt.Println("Received Headers: ", c.Request().Header)
+	fmt.Println("Received Form Data: ", c.Request().PostForm)
+	fmt.Println("Received Raw Body: ", c.Request().Body)
+
+	amountStr := c.FormValue("amount")
+	fmt.Println("Received Amount: ", amountStr, " Type: ", reflect.TypeOf(amountStr))
+
+	if amountStr == "" {
+		logger.Println("Amount is missing in the form data")
+		return c.JSON(http.StatusBadRequest, "Amount is missing in the form data")
+	}
+
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		logger.Println("Invalid amount format")
+		return c.JSON(http.StatusBadRequest, "Invalid amount format")
+	}
+	fmt.Println("Received Amount: ", c.FormValue("amount"), " ", reflect.TypeOf(c.FormValue("amount")))
+	groupName := c.Param("name")
+
+	paidByID := c.FormValue("paidBy")
+	splitBetweenIDs := c.FormValue("splitBetween")
+	splitRatesStr := c.FormValue("splitRates")
+
+	// Find the payer by ID
+	paidByIdConv, err := strconv.ParseInt(paidByID, 10, 32)
+	if err != nil {
+		logger.Println("Error in PaidBy ID conversion")
+		return c.JSON(http.StatusBadRequest, "Invalid paidBy ID format")
+	}
+
+	paidBy := findUserByID(int32(paidByIdConv))
+	if paidBy == nil {
+		logger.Println("PaidBy user not found")
+		return c.JSON(http.StatusNotFound, "PaidBy user not found")
+	}
+
+	// Parse splitBetween user IDs
+	splitBetweenUsers := parseUserIDs(splitBetweenIDs)
+	if len(splitBetweenUsers) == 0 {
+		logger.Println("No valid users found in splitBetween")
+		return c.JSON(http.StatusBadRequest, "No valid users found in splitBetween")
+	}
+	logger.Println("Split Between Users: ", splitBetweenUsers)
+
+	// Parse split rates
+	splitRates := parseFloat32Array(splitRatesStr)
+	if len(splitRates) == 0 {
+		logger.Println("No valid splits found in splitRates")
+		return c.JSON(http.StatusBadRequest, "No valid users found in splitBetween")
+	}
+	logger.Println("Split Rates: ", splitRates)
+
+	if len(splitRates) != len(splitBetweenUsers) {
+		logger.Println("Split rates count does not match the number of users")
+		return c.JSON(http.StatusBadRequest, "Invalid split rates")
+	}
+
+	// Find the group
+	var group *group.Group
+	for _, g := range groups {
+		if g.Name == groupName {
+			group = g
+			break
+		}
+	}
+
+	if group == nil {
+		logger.Println("Group not found")
+		return c.JSON(http.StatusNotFound, "Group not found")
+	}
+
+	// Create the expense
+	expense, err := models.NewExpense(amount, paidBy, splitBetweenUsers, splitRates)
+	if err != nil {
+		logger.Println("Error creating expense:", err)
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	// Add the expense to the group
+	group.AddExpense(expense)
+
+	// Update the global expenses slice
+	expenses = append(expenses, expense)
+
+	// Split the expense to update the balances
+	err = expense.SplitExpense()
+	if err != nil {
+		logger.Println("Error splitting expense:", err)
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	logger.Println("Added Expense to Group:", group.Name)
+	return c.JSON(http.StatusCreated, expense)
+}
+
+// Helper function to parse comma-separated float32 values
+func parseFloat32Array(input string) []float32 {
+	strValues := strings.Split(input, ",")
+	var floatValues []float32
+
+	for _, str := range strValues {
+		if value, err := strconv.ParseFloat(str, 32); err == nil {
+			floatValues = append(floatValues, float32(value))
+		}
+	}
+
+	return floatValues
 }

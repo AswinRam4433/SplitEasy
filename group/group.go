@@ -51,3 +51,7 @@ func (g *Group) PrintGroupInfo() {
 		fmt.Printf("ID: %d, Name: %s, Balance: %.2f\n", member.Id, member.Name, member.Balance)
 	}
 }
+
+func (g *Group) AddExpense(expense *models.Expense) {
+	g.Expenses = append(g.Expenses, expense)
+}
