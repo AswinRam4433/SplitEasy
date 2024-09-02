@@ -7,14 +7,16 @@ import (
 )
 
 type Group struct {
-	Name    string
-	Members []*models.User
+	Name     string
+	Members  []*models.User
+	Expenses []*models.Expense // To keep track of all expenses related to the group
 }
 
 func NewGroup(name string, members []*models.User) *Group {
 	return &Group{
-		Name:    name,
-		Members: members,
+		Name:     name,
+		Members:  members,
+		Expenses: []*models.Expense{},
 	}
 }
 
