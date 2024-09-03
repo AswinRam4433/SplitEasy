@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4"
 	"log"
@@ -12,17 +13,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-//func main() {
-//	fmt.Println("Hello")
-//	fmt.Println("New Line")
-//	user1 := models.NewUser("Aswin")
-//	fmt.Println(user1)
-//	user2 := models.NewUser("Bhuvan")
-//	fmt.Println(user2)
-//	user3 := models.NewUser("Chetan")
-//	fmt.Println(user3)
-//}
 
 var (
 	users    []*models.User
@@ -83,7 +73,10 @@ func getUser(c echo.Context) error {
 
 func createGroup(c echo.Context) error {
 	name := c.FormValue("name")
-	members := parseUserIDs(c.FormValue("members"))
+	members, err := parseUserIDs(c.FormValue("members"))
+	if err != nil {
+		log.Println(err)
+	}
 	createdGroup := group.NewGroup(name, members)
 	groups = append(groups, createdGroup)
 	logger.Println("Created Group With Name: ", createdGroup.Name)
@@ -160,10 +153,10 @@ func getPayment(c echo.Context) error {
 }
 
 // Helper functions
-func parseUserIDs(userIDs string) []*models.User {
+func parseUserIDs(userIDs string) ([]*models.User, error) {
 	ids := strings.Split(userIDs, ",")
 	var users []*models.User
-
+	var userAvailabilityErr error
 	for _, idStr := range ids {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
@@ -171,12 +164,15 @@ func parseUserIDs(userIDs string) []*models.User {
 		}
 
 		user := findUserByID(int32(id))
+
 		if user != nil {
 			users = append(users, user)
+		} else {
+			userAvailabilityErr = errors.New(fmt.Sprintf("User with ID %d not found", id))
 		}
 	}
 
-	return users
+	return users, userAvailabilityErr
 }
 
 func parseExpenseIDs(expenseIDs string) []*models.Expense {
@@ -265,7 +261,10 @@ func createExpense(c echo.Context) error {
 	}
 
 	// Parse splitBetween user IDs
-	splitBetweenUsers := parseUserIDs(splitBetweenIDs)
+	splitBetweenUsers, err := parseUserIDs(splitBetweenIDs)
+	if err != nil {
+		log.Println(err)
+	}
 	if len(splitBetweenUsers) == 0 {
 		logger.Println("No valid users found in splitBetween")
 		return c.JSON(http.StatusBadRequest, "No valid users found in splitBetween")
