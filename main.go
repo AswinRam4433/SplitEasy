@@ -21,8 +21,13 @@ var (
 )
 
 var (
-	logger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime)
+	infoLogger  = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime)
+	warnLogger  = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime)
+	errorLogger = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
+
+var expensesMap = make(map[int]*models.Expense) // map to hold expenses by ID
+var paymentsMap = make(map[int]*models.Payment) // map to hold payments by ID
 
 func main() {
 	e := echo.New()
@@ -30,15 +35,16 @@ func main() {
 	// Routes
 	e.POST("/users", createUser)
 	e.GET("/users/:id", getUser)
+	e.GET("/list", listUsers)
 	e.POST("/groups", createGroup)
 	e.GET("/groups/:name", getGroup)
 	e.POST("/payments", createPayment)
 	e.GET("/payments/:id", getPayment)
-	e.GET("/list", listUsers)
 	e.POST("/groups/:name/expenses", createExpense)
+	e.GET("/expenses", listExpenses)
 
 	// Start server
-	logger.Println("Attempting To Start Server...")
+	infoLogger.Println("Attempting To Start Server...")
 	e.Logger.Fatal(e.Start(":8080"))
 
 }
@@ -48,7 +54,7 @@ func createUser(c echo.Context) error {
 	fmt.Println("Name is ", name)
 	user := models.NewUser(name)
 	users = append(users, user)
-	logger.Println("Created User With Id: ", user.Id)
+	infoLogger.Println("Created User With Id: ", user.Id)
 	return c.JSON(http.StatusCreated, user)
 }
 
@@ -56,18 +62,18 @@ func getUser(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		logger.Println("Invalid ID format")
+		warnLogger.Println("Invalid ID format")
 		return c.JSON(http.StatusBadRequest, "Invalid ID format")
 	}
 
 	for _, user := range users {
 		if user.Id == int32(id) {
-			logger.Println("Retrieved User With Id: ", user.Id)
+			infoLogger.Println("Retrieved User With Id: ", user.Id)
 			return c.JSON(http.StatusOK, user)
 		}
 	}
 
-	logger.Println("No Matching User")
+	errorLogger.Println("No Matching User")
 	return c.JSON(http.StatusNotFound, "User not found")
 }
 
@@ -75,11 +81,11 @@ func createGroup(c echo.Context) error {
 	name := c.FormValue("name")
 	members, err := parseUserIDs(c.FormValue("members"))
 	if err != nil {
-		log.Println(err)
+		errorLogger.Println(err)
 	}
 	createdGroup := group.NewGroup(name, members)
 	groups = append(groups, createdGroup)
-	logger.Println("Created Group With Name: ", createdGroup.Name)
+	infoLogger.Println("Created Group With Name: ", createdGroup.Name)
 	return c.JSON(http.StatusCreated, groups)
 }
 
@@ -87,14 +93,59 @@ func getGroup(c echo.Context) error {
 	name := c.Param("name")
 	for _, eachGroup := range groups {
 		if eachGroup.Name == name {
-			logger.Println("Retrieved Group With Name: ", eachGroup.Name)
+			infoLogger.Println("Retrieved Group With Name: ", eachGroup.Name)
 			return c.JSON(http.StatusOK, eachGroup)
 
 		}
 	}
-	logger.Println("No Matching Group")
+	errorLogger.Println("No Matching Group")
 	return c.JSON(http.StatusNotFound, "Group not found")
 }
+
+//func createPayment(c echo.Context) error {
+//	payerID := c.FormValue("payer")
+//	payeeID := c.FormValue("payee")
+//	amountStr := c.FormValue("amount")
+//	mode := models.PaymentMode(c.FormValue("mode"))
+//	identifier := c.FormValue("identifier")
+//	note := c.FormValue("note")
+//	expenses := parseExpenseIDs(c.FormValue("expenses"))
+//
+//	// Convert amount from string to float64
+//	amount, err := strconv.ParseFloat(amountStr, 64)
+//	if err != nil {
+//		warnLogger.Println("Invalid Amount Format")
+//		return c.JSON(http.StatusBadRequest, "Invalid amount format")
+//	}
+//
+//	payerIdConv, err := strconv.ParseInt(payerID, 10, 32)
+//	if err != nil {
+//		log.Fatal("Error In Payer ID Conversion Process")
+//	}
+//	payeeIdConv, err := strconv.ParseInt(payeeID, 10, 32)
+//	if err != nil {
+//		log.Fatal("Error In Payee ID Conversion Process")
+//	}
+//	payer := findUserByID(int32(payerIdConv))
+//	payee := findUserByID(int32(payeeIdConv))
+//
+//	if payer == nil || payee == nil {
+//		warnLogger.Println("Invalid Payer or Payee")
+//		return c.JSON(http.StatusBadRequest, "Invalid payer or payee")
+//	}
+//
+//	payment := models.NewPayment(payer, payee, amount, mode, identifier, note, expenses)
+//	infoLogger.Println("The new payment being added is: ", payment)
+//	payments = append(payments, payment)
+//
+//	err = payment.SettlePayment()
+//	if err != nil {
+//		errorLogger.Println("Invalid Settlement")
+//		return c.JSON(http.StatusBadRequest, err.Error())
+//	}
+//	infoLogger.Println("Created Payment")
+//	return c.JSON(http.StatusCreated, payment)
+//}
 
 func createPayment(c echo.Context) error {
 	payerID := c.FormValue("payer")
@@ -103,40 +154,56 @@ func createPayment(c echo.Context) error {
 	mode := models.PaymentMode(c.FormValue("mode"))
 	identifier := c.FormValue("identifier")
 	note := c.FormValue("note")
-	expenses := parseExpenseIDs(c.FormValue("expenses"))
+	expenseIDs := c.FormValue("expenses")
 
 	// Convert amount from string to float64
 	amount, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
-		logger.Println("Invalid Amount Format")
+		warnLogger.Println("Invalid Amount Format")
 		return c.JSON(http.StatusBadRequest, "Invalid amount format")
 	}
 
+	// Convert payer and payee IDs to integers
 	payerIdConv, err := strconv.ParseInt(payerID, 10, 32)
 	if err != nil {
-		log.Fatal("Error In Payer ID Conversion Process")
+		errorLogger.Println("Error In Payer ID Conversion Process")
+		return c.JSON(http.StatusBadRequest, "Invalid payer ID format")
 	}
+
 	payeeIdConv, err := strconv.ParseInt(payeeID, 10, 32)
 	if err != nil {
-		log.Fatal("Error In Payee ID Conversion Process")
+		errorLogger.Println("Error In Payee ID Conversion Process")
+		return c.JSON(http.StatusBadRequest, "Invalid payee ID format")
 	}
+
 	payer := findUserByID(int32(payerIdConv))
 	payee := findUserByID(int32(payeeIdConv))
 
 	if payer == nil || payee == nil {
-		logger.Println("Invalid Payer or Payee")
+		warnLogger.Println("Invalid Payer or Payee")
 		return c.JSON(http.StatusBadRequest, "Invalid payer or payee")
 	}
 
+	// Find expenses associated with the payment
+	expenses := parseExpenseIDs(expenseIDs)
+
+	if len(expenses) == 0 {
+		warnLogger.Println("No valid expenses found")
+		return c.JSON(http.StatusBadRequest, "No valid expenses found")
+	}
+
+	// Create the payment
 	payment := models.NewPayment(payer, payee, amount, mode, identifier, note, expenses)
 	payments = append(payments, payment)
 
+	// Attempt to settle the payment against the expenses
 	err = payment.SettlePayment()
 	if err != nil {
-		logger.Println("Invalid Settlement")
+		errorLogger.Println("Invalid Settlement:", err)
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
-	logger.Println("Created Payment")
+
+	infoLogger.Println("Created Payment")
 	return c.JSON(http.StatusCreated, payment)
 }
 
@@ -144,11 +211,11 @@ func getPayment(c echo.Context) error {
 	id := c.Param("id")
 	for _, payment := range payments {
 		if string(payment.ID) == id {
-			logger.Println("Payment Retrieved With Id: ", payment.ID)
+			infoLogger.Println("Payment Retrieved With Id: ", payment.ID)
 			return c.JSON(http.StatusOK, payment)
 		}
 	}
-	logger.Println("Payment Not Found")
+	errorLogger.Println("Payment Not Found")
 	return c.JSON(http.StatusNotFound, "Payment not found")
 }
 
@@ -207,7 +274,7 @@ var expenses []*models.Expense
 
 func findExpenseByID(id int32) *models.Expense {
 	for _, expense := range expenses {
-		if expense.Id == id {
+		if expense.ID == int(id) {
 			return expense
 		}
 	}
@@ -215,9 +282,9 @@ func findExpenseByID(id int32) *models.Expense {
 }
 
 func listUsers(c echo.Context) error {
-	logger.Println("Listing Users")
+	infoLogger.Println("Listing Users")
 	for _, user := range users {
-		logger.Println("User:", user.Id, user.Name)
+		infoLogger.Println("User:", user.Id, user.Name)
 	}
 	return c.JSON(http.StatusOK, users)
 }
@@ -231,13 +298,13 @@ func createExpense(c echo.Context) error {
 	fmt.Println("Received Amount: ", amountStr, " Type: ", reflect.TypeOf(amountStr))
 
 	if amountStr == "" {
-		logger.Println("Amount is missing in the form data")
+		warnLogger.Println("Amount is missing in the form data")
 		return c.JSON(http.StatusBadRequest, "Amount is missing in the form data")
 	}
 
 	amount, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
-		logger.Println("Invalid amount format")
+		errorLogger.Println("Invalid amount format")
 		return c.JSON(http.StatusBadRequest, "Invalid amount format")
 	}
 	fmt.Println("Received Amount: ", c.FormValue("amount"), " ", reflect.TypeOf(c.FormValue("amount")))
@@ -250,37 +317,37 @@ func createExpense(c echo.Context) error {
 	// Find the payer by ID
 	paidByIdConv, err := strconv.ParseInt(paidByID, 10, 32)
 	if err != nil {
-		logger.Println("Error in PaidBy ID conversion")
+		errorLogger.Println(fmt.Sprint("Error in PaidBy ID conversion: ", err))
 		return c.JSON(http.StatusBadRequest, "Invalid paidBy ID format")
 	}
 
 	paidBy := findUserByID(int32(paidByIdConv))
 	if paidBy == nil {
-		logger.Println("PaidBy user not found")
+		errorLogger.Println("PaidBy user not found")
 		return c.JSON(http.StatusNotFound, "PaidBy user not found")
 	}
 
 	// Parse splitBetween user IDs
 	splitBetweenUsers, err := parseUserIDs(splitBetweenIDs)
 	if err != nil {
-		log.Println(err)
+		errorLogger.Println(err)
 	}
 	if len(splitBetweenUsers) == 0 {
-		logger.Println("No valid users found in splitBetween")
+		errorLogger.Println("No valid users found in splitBetween")
 		return c.JSON(http.StatusBadRequest, "No valid users found in splitBetween")
 	}
-	logger.Println("Split Between Users: ", splitBetweenUsers)
+	infoLogger.Println("Split Between Users: ", splitBetweenUsers)
 
 	// Parse split rates
 	splitRates := parseFloat32Array(splitRatesStr)
 	if len(splitRates) == 0 {
-		logger.Println("No valid splits found in splitRates")
+		warnLogger.Println("No valid splits found in splitRates")
 		return c.JSON(http.StatusBadRequest, "No valid users found in splitBetween")
 	}
-	logger.Println("Split Rates: ", splitRates)
+	infoLogger.Println("Split Rates: ", splitRates)
 
 	if len(splitRates) != len(splitBetweenUsers) {
-		logger.Println("Split rates count does not match the number of users")
+		errorLogger.Println("Split rates count does not match the number of users")
 		return c.JSON(http.StatusBadRequest, "Invalid split rates")
 	}
 
@@ -294,31 +361,25 @@ func createExpense(c echo.Context) error {
 	}
 
 	if group == nil {
-		logger.Println("Group not found")
+		warnLogger.Println("Group not found")
 		return c.JSON(http.StatusNotFound, "Group not found")
 	}
 
 	// Create the expense
-	expense, err := models.NewExpense(amount, paidBy, splitBetweenUsers, splitRates)
-	if err != nil {
-		logger.Println("Error creating expense:", err)
-		return c.JSON(http.StatusBadRequest, err.Error())
-	}
+	expense := models.NewExpense(amount, paidBy, splitBetweenUsers, splitRates)
 
-	// Add the expense to the group
 	group.AddExpense(expense)
-
-	// Update the global expenses slice
 	expenses = append(expenses, expense)
+	expensesMap[expense.ID] = expense
 
 	// Split the expense to update the balances
 	err = expense.SplitExpense()
 	if err != nil {
-		logger.Println("Error splitting expense:", err)
+		errorLogger.Println("Error splitting expense in CreateExpense:", err)
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 
-	logger.Println("Added Expense to Group:", group.Name)
+	infoLogger.Println("Added Expense to Group:", group.Name)
 	return c.JSON(http.StatusCreated, expense)
 }
 
@@ -334,4 +395,12 @@ func parseFloat32Array(input string) []float32 {
 	}
 
 	return floatValues
+}
+
+func listExpenses(c echo.Context) error {
+	infoLogger.Println("Listing Expenses")
+	for _, expense := range expenses {
+		infoLogger.Println("Expense ID:", expense.ID, "Amount:", expense.Amount)
+	}
+	return c.JSON(http.StatusOK, expenses)
 }

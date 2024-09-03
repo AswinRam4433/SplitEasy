@@ -32,13 +32,14 @@ func TestNewPayment(t *testing.T) {
 				expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
 			},
 			want: &Payment{
-				Payer:             &User{Name: "User A", Balance: 200, Id: 1},
-				Payee:             &User{Name: "User B", Balance: 100, Id: 2},
-				Amount:            300,
-				Mode:              UPI,
-				PaymentDate:       time.Date(2024, 9, 2, 14, 30, 45, 100, time.Local),
-				PaymentIdentifier: "DUMMYTXN1",
-				Note:              "Lorem Ipsum",
+				Payer:      &User{Name: "User A", Balance: 200, Id: 1},
+				Payee:      &User{Name: "User B", Balance: 100, Id: 2},
+				Amount:     300,
+				Mode:       UPI,
+				Timestamp:  time.Now(), // Timestamp field
+				Identifier: "DUMMYTXN1",
+				Note:       "Lorem Ipsum",
+				Expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
 			},
 		},
 	}
@@ -56,9 +57,9 @@ func TestNewPayment(t *testing.T) {
 				}
 			}
 
-			// Check PaymentDate separately
-			if !got.PaymentDate.Truncate(24 * time.Hour).Equal(tt.want.PaymentDate.Truncate(24 * time.Hour)) {
-				t.Errorf("NewPayment() PaymentDate = %v, want %v", got.PaymentDate, tt.want.PaymentDate)
+			// Check Timestamp separately
+			if !got.Timestamp.Truncate(24 * time.Hour).Equal(tt.want.Timestamp.Truncate(24 * time.Hour)) {
+				t.Errorf("NewPayment() Timestamp = %v, want %v", got.Timestamp, tt.want.Timestamp)
 			}
 
 			if got.ID <= 0 {
@@ -78,8 +79,8 @@ func TestNewPayment(t *testing.T) {
 			if got.Mode != tt.want.Mode {
 				t.Errorf("NewPayment() Mode = %v, want %v", got.Mode, tt.want.Mode)
 			}
-			if got.PaymentIdentifier != tt.want.PaymentIdentifier {
-				t.Errorf("NewPayment() PaymentIdentifier = %v, want %v", got.PaymentIdentifier, tt.want.PaymentIdentifier)
+			if got.Identifier != tt.want.Identifier {
+				t.Errorf("NewPayment() Identifier = %v, want %v", got.Identifier, tt.want.Identifier)
 			}
 			if got.Note != tt.want.Note {
 				t.Errorf("NewPayment() Note = %v, want %v", got.Note, tt.want.Note)
@@ -88,96 +89,9 @@ func TestNewPayment(t *testing.T) {
 	}
 }
 
-func TestPayment_SettlePayment1(t *testing.T) {
-	payer := &User{Name: "User A", Balance: -200, Id: 1}
-	payee := &User{Name: "User B", Balance: 100, Id: 2}
-	expense1 := &Expense{
-		Amount:       100,
-		PaidBy:       payee,
-		SplitBetween: []*User{payer, payee},
-		SplitRate:    []float32{1.0, 1.0},
-	}
-	expense2 := &Expense{
-		Amount:       150,
-		PaidBy:       payee,
-		SplitBetween: []*User{payer, payee},
-		SplitRate:    []float32{1.0, 1.0},
-	}
-	type fields struct {
-		Group              string
-		ID                 int32
-		Payer              *User
-		Payee              *User
-		Amount             float64
-		Mode               PaymentMode
-		PaymentDate        time.Time
-		PaymentIdentifier  string
-		Note               string
-		AssociatedExpenses []*Expense
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		{
-			name: "Settle Payment Success",
-			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             250,
-				Mode:               Cash,
-				AssociatedExpenses: []*Expense{expense1, expense2},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Partial Payment Error",
-			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             100, // Less than the total of expenses
-				Mode:               BankTransfer,
-				AssociatedExpenses: []*Expense{expense1, expense2},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Zero Amount Payment Error",
-			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             0, // Zero amount
-				Mode:               UPI,
-				AssociatedExpenses: []*Expense{expense1},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &Payment{
-				Group:              tt.fields.Group,
-				ID:                 tt.fields.ID,
-				Payer:              tt.fields.Payer,
-				Payee:              tt.fields.Payee,
-				Amount:             tt.fields.Amount,
-				Mode:               tt.fields.Mode,
-				PaymentDate:        tt.fields.PaymentDate,
-				PaymentIdentifier:  tt.fields.PaymentIdentifier,
-				Note:               tt.fields.Note,
-				AssociatedExpenses: tt.fields.AssociatedExpenses,
-			}
-			if err := p.SettlePayment(); (err != nil) != tt.wantErr {
-				t.Errorf("SettlePayment() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestPayment_SettlePayment(t *testing.T) {
 	payer := &User{Name: "User A", Balance: -200, Id: 1}
-	payee := &User{Name: "User B", Balance: 100, Id: 2}
+	payee := &User{Name: "User B", Balance: 0, Id: 2}
 	expense1 := &Expense{
 		Amount:       100,
 		PaidBy:       payee,
@@ -185,23 +99,21 @@ func TestPayment_SettlePayment(t *testing.T) {
 		SplitRate:    []float32{1.0, 1.0},
 	}
 	expense2 := &Expense{
-		Amount:       150,
+		Amount:       100,
 		PaidBy:       payee,
 		SplitBetween: []*User{payer, payee},
 		SplitRate:    []float32{1.0, 1.0},
 	}
 
 	type fields struct {
-		Group              string
-		ID                 int32
-		Payer              *User
-		Payee              *User
-		Amount             float64
-		Mode               PaymentMode
-		PaymentDate        time.Time
-		PaymentIdentifier  string
-		Note               string
-		AssociatedExpenses []*Expense
+		Payer      *User
+		Payee      *User
+		Amount     float64
+		Mode       PaymentMode
+		Timestamp  time.Time
+		Identifier string
+		Note       string
+		Expenses   []*Expense
 	}
 
 	tests := []struct {
@@ -213,54 +125,54 @@ func TestPayment_SettlePayment(t *testing.T) {
 		{
 			name: "Settle Payment Success",
 			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             250,
-				Mode:               Cash,
-				AssociatedExpenses: []*Expense{expense1, expense2},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   200,
+				Mode:     Cash,
+				Expenses: []*Expense{expense1, expense2},
 			},
 			want: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             250,
-				Mode:               Cash,
-				AssociatedExpenses: []*Expense{expense1, expense2},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   0,
+				Mode:     Cash,
+				Expenses: []*Expense{expense1, expense2},
 			},
 			wantErr: false,
 		},
 		{
 			name: "Partial Payment Error",
 			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             100, // Less than the total of expenses
-				Mode:               BankTransfer,
-				AssociatedExpenses: []*Expense{expense1, expense2},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   10, // Less than the total of expenses
+				Mode:     BankTransfer,
+				Expenses: []*Expense{expense1, expense2},
 			},
 			want: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             100, // Should be unchanged
-				Mode:               BankTransfer,
-				AssociatedExpenses: []*Expense{expense1, expense2},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   10, // Should be unchanged
+				Mode:     BankTransfer,
+				Expenses: []*Expense{expense1, expense2},
 			},
 			wantErr: true,
 		},
 		{
 			name: "Zero Amount Payment Error",
 			fields: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             0, // Zero amount
-				Mode:               UPI,
-				AssociatedExpenses: []*Expense{expense1},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   0, // Zero amount
+				Mode:     UPI,
+				Expenses: []*Expense{expense1},
 			},
 			want: fields{
-				Payer:              payer,
-				Payee:              payee,
-				Amount:             0, // Should be unchanged
-				Mode:               UPI,
-				AssociatedExpenses: []*Expense{expense1},
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   0, // Should be unchanged
+				Mode:     UPI,
+				Expenses: []*Expense{expense1},
 			},
 			wantErr: true,
 		},
@@ -269,16 +181,14 @@ func TestPayment_SettlePayment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Payment{
-				Group:              tt.fields.Group,
-				ID:                 tt.fields.ID,
-				Payer:              tt.fields.Payer,
-				Payee:              tt.fields.Payee,
-				Amount:             tt.fields.Amount,
-				Mode:               tt.fields.Mode,
-				PaymentDate:        tt.fields.PaymentDate,
-				PaymentIdentifier:  tt.fields.PaymentIdentifier,
-				Note:               tt.fields.Note,
-				AssociatedExpenses: tt.fields.AssociatedExpenses,
+				Payer:      tt.fields.Payer,
+				Payee:      tt.fields.Payee,
+				Amount:     tt.fields.Amount,
+				Mode:       tt.fields.Mode,
+				Timestamp:  tt.fields.Timestamp,
+				Identifier: tt.fields.Identifier,
+				Note:       tt.fields.Note,
+				Expenses:   tt.fields.Expenses,
 			}
 			err := p.SettlePayment()
 
@@ -288,8 +198,20 @@ func TestPayment_SettlePayment(t *testing.T) {
 			}
 
 			// Compare Payment fields directly
-			if p.Payer != tt.want.Payer || p.Payee != tt.want.Payee || p.Amount != tt.want.Amount || p.Mode != tt.want.Mode || p.PaymentIdentifier != tt.want.PaymentIdentifier || p.Note != tt.want.Note {
-				t.Errorf("SettlePayment() = %+v, want %+v", p, tt.want)
+			if p.Payer != tt.want.Payer || p.Payee != tt.want.Payee || p.Amount != tt.want.Amount || p.Mode != tt.want.Mode || p.Identifier != tt.want.Identifier || p.Note != tt.want.Note {
+				t.Errorf("SettlePayment() Payment = %v, want %v", p, tt.want)
+			}
+
+			// Compare Expenses if no error
+			if !tt.wantErr {
+				if len(p.Expenses) != len(tt.want.Expenses) {
+					t.Errorf("SettlePayment() Expenses length = %v, want %v", len(p.Expenses), len(tt.want.Expenses))
+				}
+				for i, exp := range p.Expenses {
+					if exp != tt.want.Expenses[i] {
+						t.Errorf("SettlePayment() Expense %d = %v, want %v", i, exp, tt.want.Expenses[i])
+					}
+				}
 			}
 		})
 	}

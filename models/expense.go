@@ -3,19 +3,53 @@ package models
 import (
 	"errors"
 	"sync"
+	"time"
 )
+
+func generateExpenseID() int32 {
+	expenseIDMuLock.Lock()
+	defer expenseIDMuLock.Unlock()
+	expenseIDCounter++
+	return expenseIDCounter
+}
 
 var (
 	expenseIDCounter int32
+	expenseIDMuLock  sync.Mutex
 	expenseMu        sync.Mutex // to ensure thread safety if accessed by multiple goroutines
 )
 
+//	type Expense struct {
+//		Id           int32
+//		Amount       float64
+//		PaidBy       *User
+//		SplitBetween []*User
+//		SplitRate    []float32
+//	}
+
+// Expense struct represents an expense that needs to be settled.
 type Expense struct {
-	Id           int32
-	Amount       float64
-	PaidBy       *User
-	SplitBetween []*User
-	SplitRate    []float32
+	ID              int
+	Amount          float64
+	PaidBy          *User
+	SplitBetween    []*User
+	SplitRate       []float32
+	RemainingAmount float64 // This field will track how much is left to be settled
+	Payments        []*Payment
+	Timestamp       time.Time
+}
+
+// NewExpense creates a new Expense instance with RemainingAmount initialized.
+func NewExpense(amount float64, paidBy *User, splitBetween []*User, splitRate []float32) *Expense {
+	return &Expense{
+		ID:              int(generateExpenseID()), // You might need to implement generateExpenseID()
+		Amount:          amount,
+		PaidBy:          paidBy,
+		SplitBetween:    splitBetween,
+		SplitRate:       splitRate,
+		RemainingAmount: amount, // Initialize RemainingAmount to the full amount
+		Timestamp:       time.Now(),
+	}
 }
 
 func NewEqualExpense(amount float64, paidBy *User, splitBetween []*User) (*Expense, error) {
@@ -42,32 +76,12 @@ func NewEqualExpense(amount float64, paidBy *User, splitBetween []*User) (*Expen
 	expenseMu.Unlock()
 
 	return &Expense{
-		Id:           expenseId,
-		Amount:       amount,
-		PaidBy:       paidBy,
-		SplitBetween: splitBetween,
-		SplitRate:    splitRate,
-	}, nil
-}
-
-func NewExpense(amount float64, paidBy *User, splitBetween []*User, splitRate []float32) (*Expense, error) {
-	if amount <= 0 {
-		return nil, errors.New("amount must be positive")
-	}
-	if paidBy == nil {
-		return nil, errors.New("paidBy cannot be nil")
-	}
-	if splitBetween == nil {
-		return nil, errors.New("splitBetween cannot be nil")
-	}
-	if len(splitRate) != len(splitBetween) {
-		return nil, errors.New("splitRate length must be equal to splitBetween")
-	}
-	return &Expense{
-		Amount:       amount,
-		PaidBy:       paidBy,
-		SplitBetween: splitBetween,
-		SplitRate:    splitRate,
+		ID:              int(expenseId),
+		Amount:          amount,
+		PaidBy:          paidBy,
+		SplitBetween:    splitBetween,
+		SplitRate:       splitRate,
+		RemainingAmount: amount,
 	}, nil
 }
 
