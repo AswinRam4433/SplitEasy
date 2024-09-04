@@ -85,12 +85,12 @@ func (p *Payment) SettlePayment() error {
 			if remainingAmount >= payerShare {
 				remainingAmount -= payerShare
 				expense.RemainingAmount -= payerShare
-				p.Payee.Balance += payerShare
-				p.Payer.Balance -= payerShare
+				p.Payee.Balance -= payerShare
+				p.Payer.Balance += payerShare
 			} else {
 				expense.RemainingAmount -= remainingAmount
-				p.Payee.Balance += remainingAmount
-				p.Payer.Balance -= remainingAmount
+				p.Payee.Balance -= remainingAmount
+				p.Payer.Balance += remainingAmount
 				remainingAmount = 0
 				break
 			}
@@ -105,8 +105,8 @@ func (p *Payment) SettlePayment() error {
 	return nil
 }
 
-// PrintPaymentInfo returns a formatted string containing all the fields of a Payment structure.
-func PrintPaymentInfo(payment *Payment) string {
+// printPaymentInfo returns a formatted string containing all the fields of a Payment structure.
+func printPaymentInfo(payment *Payment) string {
 	expenseInfo := ""
 	for _, expense := range payment.Expenses {
 		expenseInfo += fmt.Sprintf("Expense ID: %d, Amount: %.2f, Paid By: %s, Remaining Amount: %.2f\n",
