@@ -1,4 +1,24 @@
-# Entity-Relationship Diagram (ERD) Overview
+# SplitEasy - An Expense Management System
+
+## Introduction
+
+This project is a robust expense management system designed to facilitate the tracking and settling of expenses among users. It is built using the Echo framework, known for its high performance and efficiency in handling HTTP requests. The system leverages MongoDB for persistent storage and utilizes Test-Driven Development (TDD) principles to ensure code quality and reliability.
+
+### Key Features
+
+- **Expense Tracking:** Manage expenses by recording who paid, who shares the expense, and the remaining amount to be settled.
+- **Payment Handling:** Record payments made to settle expenses, including various payment modes such as Cash, Bank Transfer, and UPI.
+- **Group Management:** Organize users into groups to simplify the management of group expenses.
+- **API Testing:** Endpoints have been thoroughly tested using Postman to ensure correctness and reliability.
+- **Issues Tracking:** Issues encountered during development have been added and tagged for ease of development.
+
+### Development and Testing
+
+- **Test-Driven Development (TDD):** The application has been developed using TDD principles. Comprehensive test cases are included in the `_test.go` files for all components in the models directory.
+- **GitHub Workflows:** Continuous Integration and Continuous Deployment (CI/CD) are managed through GitHub Workflows, ensuring that code changes are automatically tested and deployed.
+- **Echo Framework:** The application utilizes the Echo framework for handling HTTP requests and responses, providing a fast and efficient web server.
+
+## Entity-Relationship Diagram (ERD) Overview
 
 ### Entities
 
