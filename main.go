@@ -159,7 +159,8 @@ func createPayment(c echo.Context) error {
 	}
 
 	infoLogger.Println("Created Payment")
-	return c.JSON(http.StatusCreated, payment)
+	infoLogger.Println("Settled Correctly")
+	return c.JSON(http.StatusCreated, fmt.Sprintf("Settled Expenses Via: %s", models.PrintPaymentInfo(payment)))
 }
 
 func getPayment(c echo.Context) error {

@@ -105,8 +105,8 @@ func (p *Payment) SettlePayment() error {
 	return nil
 }
 
-// printPaymentInfo returns a formatted string containing all the fields of a Payment structure.
-func printPaymentInfo(payment *Payment) string {
+// PrintPaymentInfo returns a formatted string containing all the fields of a Payment structure.
+func PrintPaymentInfo(payment *Payment) string {
 	expenseInfo := ""
 	for _, expense := range payment.Expenses {
 		expenseInfo += fmt.Sprintf("Expense ID: %d, Amount: %.2f, Paid By: %s, Remaining Amount: %.2f\n",
