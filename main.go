@@ -102,51 +102,6 @@ func getGroup(c echo.Context) error {
 	return c.JSON(http.StatusNotFound, "Group not found")
 }
 
-//func createPayment(c echo.Context) error {
-//	payerID := c.FormValue("payer")
-//	payeeID := c.FormValue("payee")
-//	amountStr := c.FormValue("amount")
-//	mode := models.PaymentMode(c.FormValue("mode"))
-//	identifier := c.FormValue("identifier")
-//	note := c.FormValue("note")
-//	expenses := parseExpenseIDs(c.FormValue("expenses"))
-//
-//	// Convert amount from string to float64
-//	amount, err := strconv.ParseFloat(amountStr, 64)
-//	if err != nil {
-//		warnLogger.Println("Invalid Amount Format")
-//		return c.JSON(http.StatusBadRequest, "Invalid amount format")
-//	}
-//
-//	payerIdConv, err := strconv.ParseInt(payerID, 10, 32)
-//	if err != nil {
-//		log.Fatal("Error In Payer ID Conversion Process")
-//	}
-//	payeeIdConv, err := strconv.ParseInt(payeeID, 10, 32)
-//	if err != nil {
-//		log.Fatal("Error In Payee ID Conversion Process")
-//	}
-//	payer := findUserByID(int32(payerIdConv))
-//	payee := findUserByID(int32(payeeIdConv))
-//
-//	if payer == nil || payee == nil {
-//		warnLogger.Println("Invalid Payer or Payee")
-//		return c.JSON(http.StatusBadRequest, "Invalid payer or payee")
-//	}
-//
-//	payment := models.NewPayment(payer, payee, amount, mode, identifier, note, expenses)
-//	infoLogger.Println("The new payment being added is: ", payment)
-//	payments = append(payments, payment)
-//
-//	err = payment.SettlePayment()
-//	if err != nil {
-//		errorLogger.Println("Invalid Settlement")
-//		return c.JSON(http.StatusBadRequest, err.Error())
-//	}
-//	infoLogger.Println("Created Payment")
-//	return c.JSON(http.StatusCreated, payment)
-//}
-
 func createPayment(c echo.Context) error {
 	payerID := c.FormValue("payer")
 	payeeID := c.FormValue("payee")
@@ -210,7 +165,7 @@ func createPayment(c echo.Context) error {
 func getPayment(c echo.Context) error {
 	id := c.Param("id")
 	for _, payment := range payments {
-		if string(payment.ID) == id {
+		if strconv.Itoa(payment.ID) == id {
 			infoLogger.Println("Payment Retrieved With Id: ", payment.ID)
 			return c.JSON(http.StatusOK, payment)
 		}

@@ -30,7 +30,7 @@ type Payment struct {
 	Timestamp  time.Time
 	Identifier string
 	Note       string
-	Expenses   []*Expense // This is the correct field
+	Expenses   []*Expense
 }
 
 // generatePaymentID generates a unique ID for the payment.
@@ -49,37 +49,23 @@ func NewPayment(payer *User, payee *User, amount float64, mode PaymentMode, iden
 		Payee:      payee,
 		Amount:     amount,
 		Mode:       mode,
-		Timestamp:  time.Now(),
+		Timestamp:  time.Now().Truncate(time.Second), // Truncate to seconds for consistent comparison in tests
 		Identifier: identifier,
 		Note:       note,
 		Expenses:   expenses,
 	}
 }
 
+// SettlePayment settles the expenses based on the payment made.
 func (p *Payment) SettlePayment() error {
 	if p.Amount <= 0 {
 		return errors.New("payment amount must be greater than zero")
 	}
 
-	// Calculate the total amount of all expenses
-	totalExpenseAmount := 0.0
-	for _, expense := range p.Expenses {
-		totalExpenseAmount += expense.Amount
-	}
-	fmt.Println("Total Expenses:", totalExpenseAmount)
-
-	// Check if the payment amount is less than the total expense amount
-	if p.Amount < totalExpenseAmount {
-		return errors.New("payment amount is less than total expense amount")
-	}
-	fmt.Println("p.Amount:", p.Amount)
-
 	remainingAmount := p.Amount
 
 	for _, expense := range p.Expenses {
-		fmt.Println("Expense is: ", expense)
 		if expense.RemainingAmount <= 0 {
-			fmt.Println("Remaining Expense Amount Is: ", expense.RemainingAmount)
 			continue // Skip already settled expenses
 		}
 
@@ -87,12 +73,15 @@ func (p *Payment) SettlePayment() error {
 		payerShare := 0.0
 		for i, user := range expense.SplitBetween {
 			if user.Id == p.Payer.Id {
-				payerShare = float64(expense.SplitRate[i]) / float64(len(expense.SplitBetween)) * expense.Amount
+				// Share is calculated proportionally
+				payerShare = float64(expense.SplitRate[i]) * expense.Amount
 				break
 			}
 		}
 
+		// Settle the payer's share
 		if payerShare > 0 {
+			// adjusting for payer's share of the expense
 			if remainingAmount >= payerShare {
 				remainingAmount -= payerShare
 				expense.RemainingAmount -= payerShare
@@ -109,11 +98,31 @@ func (p *Payment) SettlePayment() error {
 		}
 	}
 
-	fmt.Println("Remaining Amount is ", remainingAmount)
-
 	if remainingAmount > 0 {
 		return errors.New("partial payment made, some expenses are still unsettled")
 	}
 
 	return nil
+}
+
+// printPaymentInfo returns a formatted string containing all the fields of a Payment structure.
+func printPaymentInfo(payment *Payment) string {
+	expenseInfo := ""
+	for _, expense := range payment.Expenses {
+		expenseInfo += fmt.Sprintf("Expense ID: %d, Amount: %.2f, Paid By: %s, Remaining Amount: %.2f\n",
+			expense.ID, expense.Amount, expense.PaidBy.Name, expense.RemainingAmount)
+	}
+
+	return fmt.Sprintf(
+		"Payment Info:\nID: %d\nPayer: %s\nPayee: %s\nAmount: %.2f\nMode: %s\nTimestamp: %s\nIdentifier: %s\nNote: %s\nExpenses:\n%s",
+		payment.ID,
+		payment.Payer.Name,
+		payment.Payee.Name,
+		payment.Amount,
+		payment.Mode,
+		payment.Timestamp.Format(time.RFC3339),
+		payment.Identifier,
+		payment.Note,
+		expenseInfo,
+	)
 }

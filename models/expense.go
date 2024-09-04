@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -18,14 +19,6 @@ var (
 	expenseIDMuLock  sync.Mutex
 	expenseMu        sync.Mutex // to ensure thread safety if accessed by multiple goroutines
 )
-
-//	type Expense struct {
-//		Id           int32
-//		Amount       float64
-//		PaidBy       *User
-//		SplitBetween []*User
-//		SplitRate    []float32
-//	}
 
 // Expense struct represents an expense that needs to be settled.
 type Expense struct {
@@ -83,6 +76,11 @@ func NewEqualExpense(amount float64, paidBy *User, splitBetween []*User) (*Expen
 		SplitRate:       splitRate,
 		RemainingAmount: amount,
 	}, nil
+}
+
+func PrintExpenseInfo(e Expense) string {
+	return "ID: " + strconv.Itoa(e.ID) + " Amount: " + strconv.FormatFloat(e.Amount, 'f', -1, 64) + "Paid By: " + e.PaidBy.Name + " " + strconv.FormatFloat(e.PaidBy.Balance, 'f', -1, 64) + " Remaining Amount: " + strconv.FormatFloat(e.RemainingAmount, 'f', -1, 64) + "\n"
+
 }
 
 func (e *Expense) SplitExpense() error {

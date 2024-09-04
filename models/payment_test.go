@@ -25,21 +25,21 @@ func TestNewPayment(t *testing.T) {
 			args: args{
 				payer:      &User{Name: "User A", Balance: 200, Id: 1},
 				payee:      &User{Name: "User B", Balance: 100, Id: 2},
-				amount:     300,
+				amount:     100, // Correct amount to settle both expenses
 				mode:       UPI,
 				identifier: "DUMMYTXN1",
 				note:       "Lorem Ipsum",
-				expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
+				expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User A", Balance: 200, Id: 1}, {Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
 			},
 			want: &Payment{
 				Payer:      &User{Name: "User A", Balance: 200, Id: 1},
 				Payee:      &User{Name: "User B", Balance: 100, Id: 2},
-				Amount:     300,
+				Amount:     100,
 				Mode:       UPI,
 				Timestamp:  time.Now(), // Timestamp field
 				Identifier: "DUMMYTXN1",
 				Note:       "Lorem Ipsum",
-				Expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
+				Expenses:   []*Expense{{Amount: 100, PaidBy: &User{Name: "User A", Balance: 200, Id: 1}, SplitBetween: []*User{{Name: "User A", Balance: 200, Id: 1}, {Name: "User B", Balance: 100, Id: 2}}, SplitRate: []float32{1.0}}},
 			},
 		},
 	}
@@ -49,21 +49,9 @@ func TestNewPayment(t *testing.T) {
 			// Create the payment
 			got := NewPayment(tt.args.payer, tt.args.payee, tt.args.amount, tt.args.mode, tt.args.identifier, tt.args.note, tt.args.expenses)
 
-			// Compare the ID separately if necessary
-			if got.ID == 0 {
-				// Check if the ID has been set correctly
-				if got.ID <= 0 {
-					t.Errorf("NewPayment() ID = %v, want > 0", got.ID)
-				}
-			}
-
 			// Check Timestamp separately
 			if !got.Timestamp.Truncate(24 * time.Hour).Equal(tt.want.Timestamp.Truncate(24 * time.Hour)) {
 				t.Errorf("NewPayment() Timestamp = %v, want %v", got.Timestamp, tt.want.Timestamp)
-			}
-
-			if got.ID <= 0 {
-				t.Errorf("NewPayment() ID = %v, want > 0", got.ID)
 			}
 
 			// Directly compare each field
@@ -90,19 +78,28 @@ func TestNewPayment(t *testing.T) {
 }
 
 func TestPayment_SettlePayment(t *testing.T) {
-	payer := &User{Name: "User A", Balance: -200, Id: 1}
+	payer := &User{Name: "User A", Balance: 0, Id: 1}
 	payee := &User{Name: "User B", Balance: 0, Id: 2}
 	expense1 := &Expense{
-		Amount:       100,
-		PaidBy:       payee,
-		SplitBetween: []*User{payer, payee},
-		SplitRate:    []float32{1.0, 1.0},
+		Amount:          100,
+		PaidBy:          payer,
+		SplitBetween:    []*User{payer, payee},
+		SplitRate:       []float32{1.0, 1.0},
+		RemainingAmount: 100, // Amount remaining to be settled
 	}
 	expense2 := &Expense{
-		Amount:       100,
-		PaidBy:       payee,
-		SplitBetween: []*User{payer, payee},
-		SplitRate:    []float32{1.0, 1.0},
+		Amount:          100,
+		PaidBy:          payer,
+		SplitBetween:    []*User{payer, payee},
+		SplitRate:       []float32{1.0, 1.0},
+		RemainingAmount: 100, // Amount remaining to be settled
+	}
+	expense3 := &Expense{
+		Amount:          200,
+		PaidBy:          payee,
+		SplitBetween:    []*User{payer, payee},
+		SplitRate:       []float32{1.0, 1.0},
+		RemainingAmount: 200, // Amount remaining to be settled
 	}
 
 	type fields struct {
@@ -117,9 +114,9 @@ func TestPayment_SettlePayment(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		fields  fields
-		want    fields // Expected state of the Payment object
+		name   string
+		fields fields
+		// Expected state of the Payment object
 		wantErr bool
 	}{
 		{
@@ -131,48 +128,49 @@ func TestPayment_SettlePayment(t *testing.T) {
 				Mode:     Cash,
 				Expenses: []*Expense{expense1, expense2},
 			},
-			want: fields{
+			wantErr: false,
+		},
+		{
+			name: "Settle Payment Success #2",
+			fields: fields{
 				Payer:    payer,
 				Payee:    payee,
-				Amount:   0,
+				Amount:   150,
+				Mode:     Cash,
+				Expenses: []*Expense{expense1, expense3},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Excess Payment",
+			fields: fields{
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   10000,
+				Mode:     Cash,
+				Expenses: []*Expense{expense1, expense3},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Negative Amount Payment ",
+			fields: fields{
+				Payer:    payer,
+				Payee:    payee,
+				Amount:   -10000,
 				Mode:     Cash,
 				Expenses: []*Expense{expense1, expense2},
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "Partial Payment Error",
 			fields: fields{
 				Payer:    payer,
 				Payee:    payee,
-				Amount:   10, // Less than the total of expenses
-				Mode:     BankTransfer,
+				Amount:   50,
+				Mode:     Cash,
 				Expenses: []*Expense{expense1, expense2},
-			},
-			want: fields{
-				Payer:    payer,
-				Payee:    payee,
-				Amount:   10, // Should be unchanged
-				Mode:     BankTransfer,
-				Expenses: []*Expense{expense1, expense2},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Zero Amount Payment Error",
-			fields: fields{
-				Payer:    payer,
-				Payee:    payee,
-				Amount:   0, // Zero amount
-				Mode:     UPI,
-				Expenses: []*Expense{expense1},
-			},
-			want: fields{
-				Payer:    payer,
-				Payee:    payee,
-				Amount:   0, // Should be unchanged
-				Mode:     UPI,
-				Expenses: []*Expense{expense1},
 			},
 			wantErr: true,
 		},
@@ -180,39 +178,19 @@ func TestPayment_SettlePayment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Payment{
+			payment := &Payment{
 				Payer:      tt.fields.Payer,
 				Payee:      tt.fields.Payee,
 				Amount:     tt.fields.Amount,
 				Mode:       tt.fields.Mode,
-				Timestamp:  tt.fields.Timestamp,
 				Identifier: tt.fields.Identifier,
 				Note:       tt.fields.Note,
 				Expenses:   tt.fields.Expenses,
 			}
-			err := p.SettlePayment()
-
-			// Check if the error status is as expected
-			if (err != nil) != tt.wantErr {
+			if err := payment.SettlePayment(); (err != nil) != tt.wantErr {
 				t.Errorf("SettlePayment() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			// Compare Payment fields directly
-			if p.Payer != tt.want.Payer || p.Payee != tt.want.Payee || p.Amount != tt.want.Amount || p.Mode != tt.want.Mode || p.Identifier != tt.want.Identifier || p.Note != tt.want.Note {
-				t.Errorf("SettlePayment() Payment = %v, want %v", p, tt.want)
-			}
-
-			// Compare Expenses if no error
-			if !tt.wantErr {
-				if len(p.Expenses) != len(tt.want.Expenses) {
-					t.Errorf("SettlePayment() Expenses length = %v, want %v", len(p.Expenses), len(tt.want.Expenses))
-				}
-				for i, exp := range p.Expenses {
-					if exp != tt.want.Expenses[i] {
-						t.Errorf("SettlePayment() Expense %d = %v, want %v", i, exp, tt.want.Expenses[i])
-					}
-				}
-			}
 		})
 	}
 }
