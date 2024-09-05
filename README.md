@@ -10,6 +10,7 @@ This project is a robust expense management system designed to facilitate the tr
 - **Payment Handling:** Record payments made to settle expenses, including various payment modes such as Cash, Bank Transfer, and UPI.
 - **Group Management:** Organize users into groups to simplify the management of group expenses.
 - **API Testing:** Endpoints have been thoroughly tested using Postman to ensure correctness and reliability.
+- **In-Memory Data Storage:** The application does not use a database; all data is stored in memory and will only persist while the server is running.
 - **Issues Tracking:** Issues encountered during development have been added and tagged for ease of development.
 
 ### Development and Testing
@@ -17,6 +18,13 @@ This project is a robust expense management system designed to facilitate the tr
 - **Test-Driven Development (TDD):** The application has been developed using TDD principles. Comprehensive test cases are included in the `_test.go` files for all components in the models directory.
 - **GitHub Workflows:** Continuous Integration and Continuous Deployment (CI/CD) are managed through GitHub Workflows, ensuring that code changes are automatically tested and deployed.
 - **Echo Framework:** The application utilizes the Echo framework for handling HTTP requests and responses, providing a fast and efficient web server.
+
+## Contributing
+
+We welcome contributions to enhance the application! You can raise issues or feature requests by creating a new issue in the repository. If you want to work on an existing issue, please comment on it to express your interest, and we will assign it to you. All contributions are subject to review, so please ensure your code adheres to the project's coding standards.
+
+For a detailed overview of the entity relationships and the structure of the system, please refer to the [Entity-Relationship Diagram (ERD) Overview](#entities).
+
 
 ## Entity-Relationship Diagram (ERD) Overview
 
