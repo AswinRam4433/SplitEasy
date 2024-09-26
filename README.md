@@ -25,6 +25,7 @@ We welcome contributions to enhance the application! You can raise issues or fea
 
 For a detailed overview of the entity relationships and the structure of the system, please refer to the [Entity-Relationship Diagram (ERD) Overview](#entities).
 
+I want to be transparent in sharing that this project utilized GenAI tools such as ChatGPT and GitHub Copilot for tasks like code refactoring, debugging, and design decision-making.
 
 ## Entity-Relationship Diagram (ERD) Overview
 
